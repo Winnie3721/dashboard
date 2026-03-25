@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>電商每日報表</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0efe9;
+    --text: #1a1a18;
+    --text2: #6b6b65;
+    --text3: #9e9e97;
+    --border: rgba(0,0,0,0.08);
+    --border2: rgba(0,0,0,0.14);
+    --red: #c94040;
+    --red-bg: #fdf0f0;
+    --red-light: #f5c8c8;
+    --green: #2e7d4f;
+    --green-bg: #eef7f2;
+    --amber: #b45309;
+    --amber-bg: #fef8ed;
+    --blue: #2563a8;
+    --blue-bg: #eff4fc;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 30px; height: 30px; background: var(--text); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .logo svg { width: 16px; height: 16px; fill: white; }
+  .topbar-title { font-size: 15px; font-weight: 700; }
+  .topbar-subtitle { font-size: 12px; color: var(--text3); }
+  .topbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .date-select {
+    font-size: 13px; padding: 6px 10px;
+    border: 1px solid var(--border2); border-radius: var(--radius-sm);
+    background: var(--surface2); color: var(--text);
+    font-family: inherit; cursor: pointer; outline: none;
+  }
+  .pdf-btn {
+    font-size: 12px; padding: 6px 14px;
+    border: 1px solid var(--border2); border-radius: var(--radius-sm);
+    background: var(--text); color: white;
+    font-family: inherit; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .pdf-btn:hover { opacity: 0.8; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px var(--green-bg); display: inline-block; }
+
+  /* ── MAIN ── */
+  .main { max-width: 960px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  /* ── SECTION LABEL ── */
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin: 0 0 10px; }
+
+  /* ── METRIC CARDS ── */
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .metric-card {
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 16px 18px; cursor: pointer;
+    transition: box-shadow 0.15s, transform 0.12s, border-color 0.15s;
+    position: relative; overflow: hidden;
+  }
+  .metric-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); transform: translateY(-1px); border-color: var(--border2); }
+  .metric-card.anomaly { border-color: var(--red-light); background: var(--red-bg); }
+  .metric-card.anomaly:hover { border-color: var(--red); }
+  .metric-label { font-size: 11px; color: var(--text3); font-weight: 500; margin-bottom: 8px; letter-spacing: 0.03em; }
+  .metric-value { font-size: 24px; font-weight: 700; line-height: 1; margin-bottom: 8px; }
+  .metric-delta { font-size: 12px; display: flex; align-items: center; gap: 4px; }
+  .delta-up { color: var(--green); }
+  .delta-down { color: var(--red); }
+  .anomaly-badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 10px; font-weight: 700; padding: 2px 7px;
+    background: var(--red); color: white; border-radius: 20px;
+    letter-spacing: 0.04em;
+  }
+  .click-hint { font-size: 10px; color: var(--text3); margin-top: 6px; }
+
+  /* ── CHARTS ROW ── */
+  .charts-row { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 640px) { .charts-row { grid-template-columns: 1fr; } }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 18px 14px;
+  }
+  .chart-card-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .chart-card-sub { font-size: 11px; color: var(--text3); margin-bottom: 14px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; }
+
+  /* ── BOTTOM TABLE ── */
+  .table-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin-bottom: 20px;
+  }
+  .table-head { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text3); background: var(--surface2); letter-spacing: 0.04em; text-transform: uppercase; }
+  tbody td { padding: 11px 16px; border-top: 1px solid var(--border); }
+  tbody tr:hover td { background: var(--surface2); }
+  .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  .tag-green { background: var(--green-bg); color: var(--green); }
+  .tag-red { background: var(--red-bg); color: var(--red); }
+  .tag-amber { background: var(--amber-bg); color: var(--amber); }
+  .tag-blue { background: var(--blue-bg); color: var(--blue); }
+
+  /* ── AI MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.35); align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: 16px;
+    border: 1px solid var(--border2);
+    padding: 24px; max-width: 440px; width: 100%;
+    max-height: 80vh; overflow-y: auto;
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .modal-title { font-size: 16px; font-weight: 700; line-height: 1.3; }
+  .modal-close { font-size: 22px; line-height: 1; cursor: pointer; color: var(--text3); background: none; border: none; padding: 0; flex-shrink: 0; margin-left: 12px; }
+  .modal-close:hover { color: var(--text); }
+  .modal-status {
+    font-size: 12px; font-weight: 700; padding: 8px 12px;
+    border-radius: var(--radius-sm); margin-bottom: 14px;
+  }
+  .modal-status.ok { background: var(--green-bg); color: var(--green); }
+  .modal-status.warn { background: var(--red-bg); color: var(--red); }
+  .reason-list { list-style: none; }
+  .reason-item {
+    display: flex; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5;
+  }
+  .reason-item:last-child { border-bottom: none; }
+  .reason-icon {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; margin-top: 1px;
+  }
+  .icon-warn { background: var(--red-light); color: var(--red); }
+  .icon-ok { background: #c6e6d4; color: var(--green); }
+  .modal-ai-label { font-size: 10px; color: var(--text3); text-align: right; margin-top: 12px; }
+
+  /* ── FOOTER ── */
+  .footer { text-align: center; font-size: 11px; color: var(--text3); padding: 0 0 20px; }
+
+  /* ── PRINT ── */
+  @media print {
+    .topbar { position: static; }
+    .modal-overlay { display: none !important; }
+    body { background: white; }
+    .metric-card, .chart-card, .table-card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">
+      <svg viewBox="0 0 16 16"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+    </div>
+    <div>
+      <div class="topbar-title">電商每日報表</div>
+      <div class="topbar-subtitle" id="current-date-label">載入中...</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="live-dot"></span>
+    <select class="date-select" id="date-select">
+      <option value="0">今天</option>
+      <option value="1">昨天</option>
+      <option value="2">前天</option>
+    </select>
+    <button class="pdf-btn" onclick="window.print()">⬇ 下載 PDF</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- KPI CARDS -->
+  <div class="section-label" style="margin-top: 4px;">關鍵指標 — 點擊任一卡片查看 AI 分析</div>
+  <div class="metrics-grid" id="metrics-grid"></div>
+
+  <!-- CHARTS -->
+  <div class="section-label">趨勢圖表</div>
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-card-title">近 7 日營收 vs 退款</div>
+      <div class="chart-card-sub">每日數據對比</div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot" style="background:#2563a8;"></span>營收</div>
+        <div class="legend-item"><span class="legend-dot" style="background:#c94040;"></span>退款</div>
+      </div>
+      <div style="position:relative;width:100%;height:200px;"><canvas id="revenueChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">訂單狀態分佈</div>
+      <div class="chart-card-sub">今日訂單拆解</div>
+      <div class="legend" id="pie-legend"></div>
+      <div style="position:relative;width:100%;height:200px;"><canvas id="pieChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="section-label">品類銷售明細</div>
+  <div class="table-card">
+    <div class="table-head">
+      <span style="font-size:13px;font-weight:700;">今日各品類表現</span>
+      <span style="font-size:11px;color:var(--text3);">點擊列可查看詳情</span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>品類</th>
+            <th>營收</th>
+            <th>訂單數</th>
+            <th>退款率</th>
+            <th>vs 昨日</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">資料每日手動更新 · 異常閾值：退款率 &gt;8% / 轉換率 &lt;2.5%</div>
+</div>
+
+<!-- AI MODAL -->
+<div class="modal-overlay" id="modal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">分析中...</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-status" id="modal-status"></div>
+    <ul class="reason-list" id="modal-reasons"></ul>
+    <div class="modal-ai-label">由 AI 自動生成分析</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// 💡 資料區：每天只需更新這裡的數字
+// ═══════════════════════════════════════════
+const DATA = [
+  {
+    date: '2026-03-25',
+    metrics: { revenue: 38200, orders: 312, refunds: 8900, conversion: 2.1 },
+    anomalies: { refunds: true, conversion: true },
+  },
+  {
+    date: '2026-03-24',
+    metrics: { revenue: 43500, orders: 378, refunds: 2100, conversion: 3.6 },
+    anomalies: {},
+  },
+  {
+    date: '2026-03-23',
+    metrics: { revenue: 51200, orders: 421, refunds: 1800, conversion: 3.9 },
+    anomalies: {},
+  }
+];
+
+const ANALYSES = {
+  revenue: {
+    0: { ok: false, title: '今日營收 NT$38,200', reasons: ['與昨日相比下滑 12%，需持續觀察','下午時段表現相對穩定，佔全日 38%','主力品類銷售未見異常，推測受整體流量下降影響'] },
+    1: { ok: true, title: '昨日營收 NT$43,500', reasons: ['表現優秀，為本月排名第 3 高','主力品類貢獻 58%，結構健康','晚間促銷活動效果顯著，19:00–22:00 佔比 35%'] },
+    2: { ok: true, title: '前天營收 NT$51,200', reasons: ['本週最高單日營收紀錄','促銷活動貢獻 41%，ROI 良好','平均客單價提升至 NT$122，消費力強'] }
+  },
+  orders: {
+    0: { ok: true, title: '今日訂單 312 筆', reasons: ['訂單量在正常範圍內','行動端佔比 61%，持續成長趨勢','平均客單價 NT$122'] },
+    1: { ok: true, title: '昨日訂單 378 筆', reasons: ['高於月均值 14%','新客佔比 34%，獲客效果良好','複購率提升 2%，會員黏著度提高'] },
+    2: { ok: true, title: '前天訂單 421 筆', reasons: ['近 30 天最高單日訂單量','促銷帶動大量新客下單','物流備貨充足，出貨率 99%'] }
+  },
+  refunds: {
+    0: { ok: false, title: '今日退款 NT$8,900 ⚠ 異常', reasons: ['退款率達 23.3%，遠超正常值 5%（警戒線 8%）','主因：某批次商品描述與實物不符，佔退款 68%','建議：立即下架相關 SKU，聯繫供應商處理','後續：加強商品描述審核流程，避免再次發生'] },
+    1: { ok: true, title: '昨日退款 NT$2,100', reasons: ['退款率 4.8%，在正常範圍內','主要為服飾類尺寸問題，屬常態退款','符合歷史同期水準，無需特別處理'] },
+    2: { ok: true, title: '前天退款 NT$1,800', reasons: ['退款率 3.5%，本週最低','無異常退款批次或品質問題','供應鏈品控良好，建議維持現有標準'] }
+  },
+  conversion: {
+    0: { ok: false, title: '轉換率 2.1% ⚠ 異常', reasons: ['低於過去 7 日均值 3.4%（警戒線 2.5%）','結帳頁跳出率今日上升至 47%（正常值 28%）','IT 已確認：優惠券欄位出現 bug，預計今晚修復','建議：暫停導流到結帳頁的廣告，待修復後恢復'] },
+    1: { ok: true, title: '昨日轉換率 3.6%', reasons: ['高於本月均值，廣告投放效率佳','首頁改版後效果持續顯現','建議維持現有廣告策略與版面配置'] },
+    2: { ok: true, title: '前天轉換率 3.9%', reasons: ['近期最佳轉換率，表現亮眼','搜尋關鍵字廣告貢獻最多轉換','建議加大高轉換關鍵字的預算比重'] }
+  }
+};
+
+const TREND = {
+  labels: ['7天前','6天前','5天前','4天前','3天前','前天','昨天'],
+  revenue: [39000,42000,45500,38000,47000,51200,43500],
+  refunds: [1500,2200,1800,3200,1600,1800,2100]
+};
+
+const TABLE_DATA = [
+  { cat: '服飾', revenue: 'NT$14,200', orders: 118, refundRate: '6.2%', vsYest: '+3%', status: 'ok' },
+  { cat: '3C 配件', revenue: 'NT$9,800', orders: 82, refundRate: '28.1%', vsYest: '-41%', status: 'warn' },
+  { cat: '家居生活', revenue: 'NT$7,400', orders: 61, refundRate: '3.1%', vsYest: '+8%', status: 'ok' },
+  { cat: '美妝保養', revenue: 'NT$4,600', orders: 38, refundRate: '4.4%', vsYest: '-2%', status: 'normal' },
+  { cat: '食品飲料', revenue: 'NT$2,200', orders: 13, refundRate: '1.8%', vsYest: '+12%', status: 'ok' },
+];
+
+// ═══════════════════════════════════════════
+// Render functions
+// ═══════════════════════════════════════════
+let currentDay = 0;
+
+const fmt = n => 'NT$' + n.toLocaleString();
+const fmtPct = n => n.toFixed(1) + '%';
+
+const METRIC_DEFS = [
+  { key: 'revenue', label: '今日營收', format: fmt, prevDay: [43500,51200,48000] },
+  { key: 'orders', label: '訂單總數', format: n => n + ' 筆', prevDay: [378,421,395] },
+  { key: 'refunds', label: '退款金額', format: fmt, prevDay: [2100,1800,2400], negGood: true },
+  { key: 'conversion', label: '轉換率', format: fmtPct, prevDay: [3.6,3.9,3.4], negGood: false }
+];
+
+function renderMetrics(di) {
+  const d = DATA[di];
+  const grid = document.getElementById('metrics-grid');
+  grid.innerHTML = '';
+  METRIC_DEFS.forEach(m => {
+    const val = d.metrics[m.key];
+    const prev = m.prevDay[di];
+    const pct = (val - prev) / prev * 100;
+    const isUp = pct >= 0;
+    const isGood = m.negGood ? !isUp : isUp;
+    const isAnom = !!d.anomalies[m.key];
+    const card = document.createElement('div');
+    card.className = 'metric-card' + (isAnom ? ' anomaly' : '');
+    card.innerHTML = `
+      ${isAnom ? '<span class="anomaly-badge">異常</span>' : ''}
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-value">${m.format(val)}</div>
+      <div class="metric-delta ${isGood ? 'delta-up' : 'delta-down'}">
+        ${isUp ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}% vs 前一天
+      </div>
+      <div class="click-hint">點擊查看分析 →</div>
+    `;
+    card.onclick = () => openModal(m.key, di);
+    grid.appendChild(card);
+  });
+}
+
+function openModal(key, di) {
+  const info = ANALYSES[key][di];
+  document.getElementById('modal-title').textContent = info.title;
+  const statusEl = document.getElementById('modal-status');
+  statusEl.textContent = info.ok ? '✓ 指標正常' : '⚠ 偵測到異常 — 以下為可能原因與建議';
+  statusEl.className = 'modal-status ' + (info.ok ? 'ok' : 'warn');
+  const list = document.getElementById('modal-reasons');
+  list.innerHTML = info.reasons.map((r, i) => `
+    <li class="reason-item">
+      <span class="reason-icon ${(!info.ok && i < 2) ? 'icon-warn' : 'icon-ok'}">${(!info.ok && i < 2) ? '!' : '✓'}</span>
+      <span>${r}</span>
+    </li>
+  `).join('');
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+// ── Charts ──
+let revenueChartObj, pieChartObj;
+
+function initCharts() {
+  revenueChartObj = new Chart(document.getElementById('revenueChart'), {
+    type: 'bar',
+    data: {
+      labels: TREND.labels,
+      datasets: [
+        { label: '營收', data: TREND.revenue, backgroundColor: '#2563a8', borderRadius: 4 },
+        { label: '退款', data: TREND.refunds, backgroundColor: '#c94040', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, autoSkip: false, maxRotation: 30 }, grid: { display: false } },
+        y: { ticks: { callback: v => 'NT$' + Math.round(v/1000) + 'k', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+
+  const pieColors = ['#2563a8','#f59e0b','#c94040','#6b7280'];
+  const pieLabels = ['已完成','處理中','退款','取消'];
+  const pieData   = [61, 22, 11, 6];
+  document.getElementById('pie-legend').innerHTML = pieLabels.map((l,i) =>
+    `<div class="legend-item"><span class="legend-dot" style="background:${pieColors[i]};"></span>${l} ${pieData[i]}%</div>`
+  ).join('');
+  pieChartObj = new Chart(document.getElementById('pieChart'), {
+    type: 'doughnut',
+    data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: pieColors, borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + '%' } } },
+      cutout: '65%'
+    }
+  });
+}
+
+// ── Table ──
+function renderTable() {
+  const tbody = document.getElementById('table-body');
+  const tagMap = { ok: ['tag-green','正常'], warn: ['tag-red','異常'], normal: ['tag-blue','觀察中'] };
+  tbody.innerHTML = TABLE_DATA.map(r => {
+    const [tagClass, tagLabel] = tagMap[r.status];
+    const vsColor = r.vsYest.startsWith('+') ? 'var(--green)' : 'var(--red)';
+    return `<tr>
+      <td style="font-weight:500;">${r.cat}</td>
+      <td>${r.revenue}</td>
+      <td>${r.orders}</td>
+      <td>${r.refundRate}</td>
+      <td style="color:${vsColor};font-weight:500;">${r.vsYest}</td>
+      <td><span class="tag ${tagClass}">${tagLabel}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Date label ──
+function updateDateLabel(di) {
+  const d = new Date(DATA[di].date);
+  document.getElementById('current-date-label').textContent =
+    d.toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+}
+
+// ── Init ──
+document.getElementById('date-select').addEventListener('change', function() {
+  currentDay = parseInt(this.value);
+  renderMetrics(currentDay);
+  updateDateLabel(currentDay);
+});
+
+updateDateLabel(0);
+renderMetrics(0);
+renderTable();
+initCharts();
+</script>
+</body>
+</html>
